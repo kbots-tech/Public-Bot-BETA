@@ -23,18 +23,26 @@ class help(commands.Cog, name='help'):
         
 
           for cog_name, cog in self.bot.cogs.items():
-              if  len(cog.get_commands()):
-                  embed.add_field(
-                      name=cog_name, inline=False,
-                      value=' - '.join(sorted(f'`{c.name}`' for c in cog.get_commands()))
-                  )
+              if cog_name != 'Developer Commands':
+                if  len(cog.get_commands()):
+                    embed.add_field(
+                        name=cog_name, inline=True,
+                        value=' - '.join(sorted(f'`{c.name}`' for c in cog.get_commands()))
+                    )
         else:
           embed = discord.Embed(title=f"Commands for {args}")
           for command in (self.bot.get_cog(args)).get_commands():
-            embed.add_field(name=command.name,value=command.brief,inline=False) 
+            embed.add_field(name=command.name,value=command.brief,inline=True) 
 
 
         await ctx.send(embed=embed)
+  
+  @commands.command(
+      name='ping',
+        brief='returns bot latency'
+        )
+  async def ping(self,ctx):
+    await ctx.send(f'Pong! {round(self.bot.latency *1000)}ms')
 
 
 def setup(bot):

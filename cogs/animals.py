@@ -27,14 +27,14 @@ class AnimalCog(commands.Cog,name='animals'):
         await self.dog(ctx)
       else:
         try:
-          fields = {
+          fields = [
             ('Weight',f"{data['weight']['imperial']}lbs.",True),
             ('Height',f"{data['height']['imperial']}in.",True),
             ('Breed Group',data['breed_group'] if data['breed_group'] else "N/A",True),
             ('Life Span',data['life_span'],True),
-            ('Bred for',data['bred_for'] if data['bred_for'] else 'N/A',False),
+            ('Bred for',data['bred_for'] if data['bred_for']  else 'N/A',False),
             ('Temperament',data['temperament'],False)
-          }
+          ]
           embed=discord.Embed(title=data['name'])
           embed.set_image(url = image)
           for name,value,inline in fields:
