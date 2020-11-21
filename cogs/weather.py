@@ -1,69 +1,113 @@
-"""Commands for the weather module"""
+"""Commands for the weather module."""
 import discord
 from discord.ext import commands
-from settings import weather_token
-import json
-import urllib.request
-from settings import embed_color
+import aiohttp
+from settings import WEATHER_TOKEN
 
+class Weather(commands.Cog):
+    """commands for the weather finder."""
 
-class WeatherCog(commands.Cog,name='weather'):
-    """commands for the weather finder"""
-    def __init__(self, bot):
+    def __init__(self, bot: discord.ext.commands.bot.Bot):
         self.bot = bot
 
-    #Weather command, takes in an arg of city name
     @commands.command(brief="Takes in a city name and returns the weather for that location")
-    async def weather(self,ctx, *,args):
-      embed=discord.Embed(title='Weather in '+args,color=embed_color)
+    async def weather(self, ctx: commands.context.Context, *, args: str ="") -> None:
+        if not args:
+            description = 'This should be done like `.weather city name`'
+            await ctx.send(embed=discord.Embed(title='Please give a city name', description=description))
+        else:
+            try:
+              """Weather command takes in a city name and sends embed."""
+              embed = discord.Embed(title=f"Weather in {args}")
 
-      args=args.replace(' ','%20')
-      imperialURL = "http://api.openweathermap.org/data/2.5/weather?q="+args+ "&appid="+weather_token+"units=imperial"
-      metricURL = "http://api.openweathermap.org/data/2.5/weather?q="+args+ "&appid="+weather_token+"&units=metric"
-      imperial = urllib.request.urlopen(imperialURL)
-      metric = urllib.request.urlopen(metricURL) 
-      
-      data = json.load(imperial)
-      metric=json.load(metric)
-      icon = data['weather']
-      weather = data['main']
-      weatherM=metric['main']
+              url = "http://api.openweathermap.org/data/2.5/weather?q="
+              args = args.replace(' ', '%20')
 
-      tempF = weather['temp']
-      tempFT = weather['feels_like']
-      lowF = weather['temp_min']
-      highF = weather['temp_max']
-      windM = data['wind']['speed']
-      
-      tempC = weatherM['temp']
-      tempCT = weatherM['feels_like']
-      lowC = weatherM['temp_min']
-      highC = weatherM['temp_max']
-      windK = metric['wind']['speed']
+              imperial_url = f"{url}{args}&appid={WEATHER_TOKEN}&units=imperial"
+              metric_url = f"{url}{args}&appid={WEATHER_TOKEN}&units=metric"
 
-      for f in icon:
-          icon = f['icon']
-          main = f['main']
-          description = f['description']
+              async with aiohttp.ClientSession() as session:
+                  async with session.get(metric_url) as resp:
+                      metric = await resp.json()
+                  async with session.get(imperial_url) as resp:
+                      data = await resp.json()
+        
 
-      imgUrl= 'http://openweathermap.org/img/wn/'+icon+'@4x.png'
-      args=args.replace('%20',' ')
-      embed.set_thumbnail(url=imgUrl)
-      embed.add_field(name='Status',value=main+
-      '\n'+description,inline=False)
-      embed.add_field(name='Current Temp',value=str(tempF)+'F ('+str(tempC)+'C)',inline=False)
-      embed.add_field(name='Feels Like',value=str(tempFT)+'F ('+str(tempCT)+'C)')
-      embed.add_field(name='High Temp',value=str(highF)+'F ('+str(highC)+'C)')
-      embed.add_field(name='Low Temp',value=str(lowF)+'F ('+str(lowC)+'C)')
-      embed.add_field(name='Wind Speed',value=str(windM)+'MPH ('+str(windK)+'KPH)',inline=False)
-      
+              icon = data['weather']
+              weather = data['main']
+              weather_m = metric['main']
 
-      await ctx.send(embed=embed)
-    
+              temp_f = weather['temp']
+              temp_ft = weather['feels_like']
+              low_f = weather['temp_min']
+              high_f = weather['temp_max']
+              wind_m = data['wind']['speed']
+
+              temp_c = weather_m['temp']
+              temp_fc = weather_m['feels_like']
+              low_c = weather_m['temp_min']
+              high_c = weather_m['temp_max']
+              wind_k = metric['wind']['speed']
+
+              for f in icon:
+                  icon = f['icon']
+                  main = f['main']
+                  description = f['description']
+
+              img_url = f"http://openweathermap.org/img/wn/{icon}@4x.png"
+              args = args.replace('%20', ' ')
+              embed.set_thumbnail(url=img_url)
+              fields = [
+                  (
+                      "Status",
+                      f"{main}\n{description}",
+                      False
+                  ),
+                  (
+                      'Current Temp',
+                      f"{str(temp_f)}F ({str(temp_c)}C)",
+                      False
+                  ),
+                  (
+                      'Current Temp',
+                      f"{str(temp_f)}F ({str(temp_c)}C)",
+                      False
+                  ),
+                  (
+                      'Current Temp',
+                      f"{str(temp_f)}F ({str(temp_c)}C)",
+                      False
+                  ),
+                  (
+                      'Feels Like',
+                      f"{str(temp_ft)}F ({str(temp_fc)}'C)",
+                      True
+                  ),
+                  (
+                      'High Temp',
+                      f"{str(high_f)}F ({str(high_c)}C)",
+                      True,
+                  ),
+                  (
+                      'Low Temp',
+                      f"{str(low_f)}F ({str(low_c)}C)",
+                      True
+                  ),
+                  (
+                      'Wind Speed',
+                      f"{str(wind_m)}MPH ({str(wind_k)}KPH)",
+                      False
+                  )
+              ]
+
+              for name, value, inline in fields:
+                  embed.add_field(name=name, value=value, inline=inline)
+
+              await ctx.send(embed=embed)
+            except KeyError:
+              await ctx.send(embed=discord.Embed(title=f"{args} is an invalid city name"))
 
 
-# The setup fucntion below is neccesarry. Remember we give bot.add_cog() the name of the class in this case MembersCog.
-# When we load the cog, we use the name of the file.
-def setup(bot):
-    """sets up the cog"""
-    bot.add_cog(WeatherCog(bot))
+def setup(bot: discord.ext.commands.bot.Bot) -> None:
+    """Sets up the cog."""
+    bot.add_cog(Weather(bot))

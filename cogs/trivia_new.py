@@ -5,17 +5,20 @@ import json
 import urllib.request
 import random
 import asyncio
+import aiomysql
 import aiohttp
+from settings import host, db_user, db_password, database
+
+tokenID = ""
 
 
 class TriviaCog(commands.Cog, name='trivia'):
     """
-    Commands for the Trivia Querstions
+    Commands for the Trivia Questions
     """
 
     def __init__(self, bot):
         self.bot = bot
-        self.TOKEN_ID = ""
 
     @commands.command(
         name="trivia",
@@ -26,7 +29,7 @@ class TriviaCog(commands.Cog, name='trivia'):
         quiz_var = random.randrange(9, 32)
 
         data = [6]
-        data = await self.url_request(quiz_var)
+        data = await url_request(quiz_var)
         embed = discord.Embed(title="TRIVIA", )
 
         embed.add_field(name="Category:", value=data[0], inline=True)
@@ -71,15 +74,15 @@ class TriviaCog(commands.Cog, name='trivia'):
             names = ""
             for f in entrants:
                 names = names + (f"{f.name}, ")
-                with open('scores.txt','r+') as json_file:
-                  data = json.load(json_file)
-                if not data[f.id]:
-                  data[id] = 10
+                if await get_data("SELECT * FROM `scores` WHERE id = %s",
+                                  (f.id, )):
+                    await insert_data(
+                        "UPDATE `scores` SET `score`=`score`+10 WHERE %s",
+                        (f.id, ))
                 else:
-                    data[id]+=10
-
-                with open('scores.txt', 'w') as outfile:
-                  json.dump(data, outfile)
+                    await insert_data(
+                        "INSERT INTO `scores`(`id`, `score`) VALUES (%s,%s)",
+                        (f.id, 10))
             body = "Use !score to check your score and !trivia stats to check the leaderboard!"
             message = await ctx.send(
                 embed=discord.Embed(
@@ -113,15 +116,14 @@ class TriviaCog(commands.Cog, name='trivia'):
     )
     async def score(self, ctx):
         """Command to get users score"""
-        with open('scores.txt','r+') as json_file:
-          data = json.load(json_file)
-        print(data)
-        score = data[str(ctx.author.id)]
+        score = (await get_data(
+            "SELECT `score` FROM `scores` WHERE  `id` = %s",
+            (ctx.author.id, )))
         if not score:
             score = 0
         embed = discord.Embed(
             title=f"Your Score, {ctx.author.name}",
-            description=f"{score} points",
+            description=f"{score[0][0]} points",
         )
         await ctx.send(ctx.author.mention, embed=embed)
 
@@ -130,12 +132,9 @@ class TriviaCog(commands.Cog, name='trivia'):
         brief="returns bot trivia leaderboard",
     )
     async def leaderboard(self, ctx):
-        
-        with open('scores.txt','r+') as json_file:
-          data = json.load(json_file)
-
+        data = await get_data(
+            "SELECT `id`, `score` FROM `scores` ORDER BY `score` DESC")
         leaders = ""
-
         for count, info in enumerate(data[:10], 1):
             print(info[0])
             name = self.bot.get_user(int(info[0])).name
@@ -170,70 +169,108 @@ class TriviaCog(commands.Cog, name='trivia'):
                                                   payload.member)
 
 
-    async def url_request(self,value: int):
-        """Returns data for trivia questions"""
-        url = ("https://opentdb.com/api.php?amount=1&category=" + str(value) +
-              "&type=multiple&token=" + self.TOKEN_ID)
+async def url_request(value: int):
+    """Returns data for trivia questions"""
+    global tokenID
+    url = ("https://opentdb.com/api.php?amount=1&category=" + str(value) +
+           "&type=multiple&token=" + tokenID)
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                data = await resp.json()
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            data = await resp.json()
 
-        responsecode = data["response_code"]
-        if str(responsecode) == "4":
-            url2 = f"https://opentdb.com/api_token.php?command=reset&token={self.TOKEN_ID}"
+    responsecode = data["response_code"]
+    if str(responsecode) == "4":
+        url2 = f"https://opentdb.com/api_token.php?command=reset&token={tokenID}"
 
-        elif str(responsecode) == "3":
-            url2 = "https://opentdb.com/api_token.php?command=request"
-            response2 = urllib.request.urlopen(url2)
-            data2 = json.load(response2)
-            self.TOKEN_ID = data2["token"]
-            data = await self.url_request(value)
-            return data
-        else:
-            question = data["results"]
-            for f in question:
-                data[0] = f["category"]
-                data[1] = f["difficulty"]
-                correct_answer = f["correct_answer"]
-                answers = f["incorrect_answers"]
-                data[2] = f["question"]
+    elif str(responsecode) == "3":
+        url2 = "https://opentdb.com/api_token.php?command=request"
+        response2 = urllib.request.urlopen(url2)
+        data2 = json.load(response2)
+        tokenID = data2["token"]
+        data = await url_request(value)
+        return data
+    else:
+        question = data["results"]
+        for f in question:
+            data[0] = f["category"]
+            data[1] = f["difficulty"]
+            correct_answer = f["correct_answer"]
+            answers = f["incorrect_answers"]
+            data[2] = f["question"]
 
-            answers.append(correct_answer)
+        answers.append(correct_answer)
 
-            random.shuffle(answers)
+        random.shuffle(answers)
 
-            correct = correct_answer
+        correct = correct_answer
 
-            answers[0] = answers[0].replace("&#039;", "'")
-            answers[1] = answers[1].replace("&#039;", "'")
-            answers[2] = answers[2].replace("&#039;", "'")
-            answers[3] = answers[3].replace("&#039;", "'")
+        answers[0] = answers[0].replace("&#039;", "'")
+        answers[1] = answers[1].replace("&#039;", "'")
+        answers[2] = answers[2].replace("&#039;", "'")
+        answers[3] = answers[3].replace("&#039;", "'")
 
-            if answers[0] == correct:
-                correct = 1
-            if answers[1] == correct:
-                correct = 2
-            if answers[2] == correct:
-                correct = 3
-            if answers[3] == correct:
-                correct = 4
+        if answers[0] == correct:
+            correct = 1
+        if answers[1] == correct:
+            correct = 2
+        if answers[2] == correct:
+            correct = 3
+        if answers[3] == correct:
+            correct = 4
 
-            answers[0] = answers[0].replace("&amp;", "&")
-            answers[1] = answers[1].replace("&amp;", "&")
-            answers[2] = answers[2].replace("&amp;", "&")
-            answers[3] = answers[3].replace("&amp;", "&")
+        answers[0] = answers[0].replace("&amp;", "&")
+        answers[1] = answers[1].replace("&amp;", "&")
+        answers[2] = answers[2].replace("&amp;", "&")
+        answers[3] = answers[3].replace("&amp;", "&")
 
-            data[3] = answers[0]
-            data[4] = answers[1]
-            data[5] = answers[2]
-            data[6] = answers[3]
-            data[7] = correct
+        data[3] = answers[0]
+        data[4] = answers[1]
+        data[5] = answers[2]
+        data[6] = answers[3]
+        data[7] = correct
 
-            data[2] = data[2].replace("&quot;", '"')
-            data[2] = data[2].replace("&#039;", "'")
+        data[2] = data[2].replace("&quot;", '"')
+        data[2] = data[2].replace("&#039;", "'")
 
-            return data
+        return data
+
+
+async def get_data(args, data=()):
+    """Connects to the database and returns data"""
+    conn = await aiomysql.connect(
+        host=host,
+        port=3306,
+        user=db_user,
+        password=db_password,
+        db=database,
+    )
+
+    cur = await conn.cursor()
+    await cur.execute(args, data)
+    r = await cur.fetchall()
+
+    await cur.close()
+    conn.close()
+    return r
+
+
+async def insert_data(args, data=()):
+    """Connects to the database and inserts data"""
+    conn = await aiomysql.connect(
+        host=host,
+        port=3306,
+        user=db_user,
+        password=db_password,
+        db=database,
+    )
+
+    cur = await conn.cursor()
+    async with conn.cursor() as cur:
+        await cur.execute(args, data)
+        await conn.commit()
+
+    conn.close()
 
 
 def setup(bot):

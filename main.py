@@ -10,7 +10,7 @@ async def get_prefix(bot,message):
 
 
 bot = commands.Bot(
-	command_prefix='*t ',  # Change to desired prefix
+	command_prefix='*',  # Change to desired prefix
 	case_insensitive=True  # Commands aren't case-sensitive
 )
 
@@ -30,7 +30,7 @@ async def on_ready():  # When the bot is ready
 
 
 extensions = [
-	'cogs.cog_example','cogs.admin','cogs.help','cogs.weather','cogs.last_fm','cogs.stats'  # Same name as it would be if you were importing it
+	'cogs.cog_example','cogs.admin', 'cogs.weather','cogs.last_fm','cogs.stats','cogs.animals','cogs.help'  # Same name as it would be if you were importing it
 ]
 
 if __name__ == '__main__':  # Ensures this is the file being ran

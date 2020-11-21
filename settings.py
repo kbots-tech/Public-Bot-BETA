@@ -9,4 +9,4 @@ database=os.environ.get('database')
 embed_color=0x3d88f8
 
 MUSIC_TOKEN=os.environ.get('MUCIS_TOKEN')
-weather_token=os.environ.get('weather_token')
+WEATHER_TOKEN=os.environ.get('weather_token')
